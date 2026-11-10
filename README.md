@@ -3,7 +3,7 @@
 | File | What it is |
 |---|---|
 | `Task1_QA_Report_AdityaTiwari.pdf` | Task 1 – 11 bugs in the RealWorld (Conduit) app + root-cause analysis |
-| `task1_screenshots/` | Evidence screenshots for the report |
+| `01_…07_*.png` | Evidence screenshots for the Task 1 report |
 | `Task2_Workflow_AdityaTiwari.json` | Task 2 – n8n workflow: hourly "AI-agent repos" brief to Discord |
 | `Bonus_UptimeMonitor_AdityaTiwari.json` | Bonus – uptime monitor with alerts + daily summary |
 | `Documentation_AdityaTiwari.md` | One-page summary of the work |
@@ -25,14 +25,14 @@ The raw search JSON (≈20 repos × 80 fields) is reduced to 5 objects `{name, s
 - README fetch fails (404 / rate limit): continue without it via `README failed: continue without it` – the digest still goes out.
 - No new repos: an empty result is handled, so the "quiet week" message is sent instead of crashing.
 - Discord send fails: retried, then logged on the error output.
-- Every execution is saved (`saveDataSuccessExecution: all`), so failures show up in the Executions tab.
+- Every execution is saved, so failures show up in the Executions tab.
 
 ## Setup
 1. Run n8n: `docker run -it --rm -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n` → open http://localhost:5678 (or use an n8n Cloud trial).
-2. Discord: Server settings → Integrations → Webhooks → New webhook → copy the URL.
-3. In n8n: **Credentials → New → Discord Webhook API** → paste the URL → name it `Discord Webhook account`.
-4. **Workflows → Import from file** → choose each JSON → open each Discord node and select the credential → Save.
-5. Test: click **Execute workflow**, or call `GET http://localhost:5678/webhook-test/morning-brief`. Then toggle **Active**.
+2. Discord: Channel settings → Integrations → Webhooks → New webhook → copy the URL.
+3. In n8n: **Credentials → New → Discord Webhook** → paste the URL → name it `Discord Webhook account`.
+4. Import each JSON (⋯ → Import → From File / From URL) → open each Discord node and select the credential → Save.
+5. Test: click **Execute** and pick the "Every hour" trigger, or call `GET <your-n8n>/webhook-test/morning-brief`. Then **Publish**.
 6. Optional: add a GitHub token as header `Authorization: Bearer <token>` on both GitHub nodes to raise the rate limit from 60 to 5,000 requests/hour.
 
 **Bonus:** change `target` in *Set target + start timer* to the URL you want to monitor (the default is `https://demo.realworld.io`, which is currently down, so you can see an alert straight away).
@@ -43,5 +43,6 @@ Frontend: `gothinkster/react-redux-realworld-example-app` with `API_ROOT` in `sr
 
 ## Proof it runs
 Task 2 run on n8n Cloud (10 Nov 2026): green path end to end, and the digest delivered to Discord.
-![Canvas](task2_screenshots/task2_canvas_success.png)
-![Discord](task2_screenshots/task2_discord_message.png)
+
+![Canvas](task2_canvas_success.png)
+![Discord](task2_discord_message.png)
