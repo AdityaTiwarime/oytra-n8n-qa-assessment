@@ -1,0 +1,210 @@
+{
+  "name": "Bonus - Uptime Monitor (RealWorld app)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000001",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Target to monitor. Change this one value to point at another app.\nreturn [{ json: { target: 'https://demo.realworld.io', startedAt: Date.now() } }];"
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000002",
+      "name": "Set target + start timer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.target }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000003",
+      "name": "Ping app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 200],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Measure response time and keep running stats for the daily summary.\nconst start = $('Set target + start timer').first().json;\nconst res = $input.first().json;\nconst status = res.statusCode ?? 0;\nconst ms = Date.now() - start.startedAt;\n\nconst stats = $getWorkflowStaticData('global');\nstats.checks = (stats.checks || 0) + 1;\nstats.failures = (stats.failures || 0) + (status === 200 ? 0 : 1);\nstats.totalMs = (stats.totalMs || 0) + ms;\nstats.slowestMs = Math.max(stats.slowestMs || 0, ms);\n\nreturn [{ json: { target: start.target, status, responseMs: ms, up: status === 200, checkedAt: new Date().toISOString() } }];"
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000004",
+      "name": "Check status + timing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Network-level failure (DNS, timeout) after all retries.\nconst start = $('Set target + start timer').first().json;\nconst e = $input.first().json.error || {};\nconst stats = $getWorkflowStaticData('global');\nstats.checks = (stats.checks || 0) + 1;\nstats.failures = (stats.failures || 0) + 1;\nreturn [{ json: { target: start.target, status: 0, responseMs: Date.now() - start.startedAt, up: false, reason: e.message || 'request failed', checkedAt: new Date().toISOString() } }];"
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000005",
+      "name": "Unreachable after retries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c0ffee00-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000006",
+      "name": "Status != 200?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=🚨 **App DOWN**: {{ $json.target }}\nStatus: {{ $json.status || 'no response' }}{{ $json.reason ? ' (' + $json.reason + ')' : '' }}\nResponse time: {{ $json.responseMs }} ms\nChecked: {{ $json.checkedAt }}",
+        "options": {}
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000007",
+      "name": "Alert Discord",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [1200, 120],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "",
+          "name": "Discord Webhook account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000008",
+      "name": "Daily at 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise the last 24h and reset the counters.\nconst s = $getWorkflowStaticData('global');\nconst checks = s.checks || 0;\nconst failures = s.failures || 0;\nconst uptime = checks ? (((checks - failures) / checks) * 100).toFixed(2) : 'n/a';\nconst avg = checks ? Math.round((s.totalMs || 0) / checks) : 0;\nconst msg = `📊 **Daily uptime summary**\\nChecks: ${checks} | Failures: ${failures} | Uptime: ${uptime}%\\nAvg response: ${avg} ms | Slowest: ${s.slowestMs || 0} ms`;\ns.checks = 0; s.failures = 0; s.totalMs = 0; s.slowestMs = 0;\nreturn [{ json: { message: msg } }];"
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000009",
+      "name": "Build daily summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 520]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "b2f0c001-0000-4000-8000-000000000010",
+      "name": "Post summary to Discord",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [480, 520],
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "",
+          "name": "Discord Webhook account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [[{ "node": "Set target + start timer", "type": "main", "index": 0 }]]
+    },
+    "Set target + start timer": {
+      "main": [[{ "node": "Ping app", "type": "main", "index": 0 }]]
+    },
+    "Ping app": {
+      "main": [
+        [{ "node": "Check status + timing", "type": "main", "index": 0 }],
+        [{ "node": "Unreachable after retries", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check status + timing": {
+      "main": [[{ "node": "Status != 200?", "type": "main", "index": 0 }]]
+    },
+    "Unreachable after retries": {
+      "main": [[{ "node": "Status != 200?", "type": "main", "index": 0 }]]
+    },
+    "Status != 200?": {
+      "main": [
+        [{ "node": "Alert Discord", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Daily at 09:00": {
+      "main": [[{ "node": "Build daily summary", "type": "main", "index": 0 }]]
+    },
+    "Build daily summary": {
+      "main": [[{ "node": "Post summary to Discord", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}
