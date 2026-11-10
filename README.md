@@ -40,3 +40,8 @@ The raw search JSON (≈20 repos × 80 fields) is reduced to 5 objects `{name, s
 ## Running the Task 1 app locally
 Backend: `nsidnev/fastapi-realworld-example-app` (PostgreSQL, `.env` with `DATABASE_URL`, `alembic upgrade head`, `uvicorn app.main:app --port 8000`).
 Frontend: `gothinkster/react-redux-realworld-example-app` with `API_ROOT` in `src/agent.js` set to `http://localhost:8000/api`, served on :4100.
+
+## Proof it runs
+Task 2 run on n8n Cloud (10 Nov 2026): green path end to end, and the digest delivered to Discord.
+![Canvas](task2_screenshots/task2_canvas_success.png)
+![Discord](task2_screenshots/task2_discord_message.png)
